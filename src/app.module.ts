@@ -1,11 +1,38 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { MedicationModule } from './medications/medication.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { MedicationsModule } from './medications/medications.module';
+import { RecordsModule } from './records/records.module';
+import { FamilyModule } from './family/family.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
-  imports: [MedicationModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST ?? 'localhost',
+      port: parseInt(process.env.DB_PORT ?? '5432', 10),
+      username: process.env.DB_USERNAME ?? 'postgres',
+      password: process.env.DB_PASSWORD ?? '',
+      database: process.env.DB_NAME ?? 'pillmate',
+      autoLoadEntities: true,
+      synchronize: true,
+    }),
+    AuthModule,
+    UsersModule,
+    MedicationsModule,
+    RecordsModule,
+    FamilyModule,
+    NotificationsModule,
+  ],
   controllers: [AppController],
-  providers: [AppService], 
+  providers: [AppService],
 })
 export class AppModule {}
