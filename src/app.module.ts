@@ -13,7 +13,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true,
+      isGlobal: true, // 다른 모듈에서도 process.env 자동으로 쓸 수 있게
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
