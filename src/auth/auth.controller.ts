@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Query} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
@@ -23,4 +23,9 @@ export class AuthController {
   async getMe(@Request() req: any) {
     return req.user; // Strategy의 validate()에서 리턴한 값
   }
+
+  @Get('kakao/callback')
+  async kakaoCallback(@Query('code') code: string) {
+    return this.authService.kakaoLogin(code);
+}
 }
