@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
+import axios from 'axios';
 
 @Injectable()
 export class AuthService {
@@ -68,4 +69,58 @@ export class AuthService {
       },
     };
   }
+
+  async kakaoLogin(code: string) {
+  // 1. 인가 코드로 카카오 access_token 요청
+  const tokenResponse = await axios.post(
+    'https://kauth.kakao.com/oauth/token',
+    null,
+    {
+      params: {
+        grant_type: 'authorization_code',
+        client_id: process.env.KAKAO_CLIENT_ID,
+        redirect_uri: process.env.KAKAO_REDIRECT_URI,
+        code,
+      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    },
+  );
+
+  const kakaoAccessToken = tokenResponse.data.access_token;
+
+  // 2. access_token으로 카카오 사용자 정보 요청
+  const userResponse = await axios.get('https://kapi.kakao.com/v2/user/me', {
+    headers: { Authorization: `Bearer ${kakaoAccessToken}` },
+  });
+
+  const kakaoId = String(userResponse.data.id);
+  const nickname = userResponse.data.kakao_account?.profile?.nickname ?? '카카오유저';
+
+  // 3. 기존 유저인지 확인, 없으면 자동 회원가입
+  let user = await this.usersRepository.findOne({
+    where: { provider: 'kakao', providerId: kakaoId },
+  });
+
+  if (!user) {
+    user = this.usersRepository.create({
+      provider: 'kakao',
+      providerId: kakaoId,
+      nickname,
+    });
+    await this.usersRepository.save(user);
+  }
+
+  // 4. 우리 서비스 JWT 발급
+  const payload = { sub: user.id, email: user.email };
+  const accessToken = this.jwtService.sign(payload);
+
+  return {
+    accessToken,
+    user: {
+      id: user.id,
+      nickname: user.nickname,
+      provider: user.provider,
+    },
+  };
+}
 }
