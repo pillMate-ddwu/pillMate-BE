@@ -27,5 +27,10 @@ export class AuthController {
   @Get('kakao/callback')
   async kakaoCallback(@Query('code') code: string) {
     return this.authService.kakaoLogin(code);
-}
+  }
+
+  @Post('refresh')
+  async refresh(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refresh(refreshToken);
+  }
 }
