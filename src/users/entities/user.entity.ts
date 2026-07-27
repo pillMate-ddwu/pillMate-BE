@@ -20,6 +20,9 @@ export class User {
   @Column({ nullable: true })
   nickname!: string;
 
+  @Column({ nullable: true })
+  refreshToken!: string; // 추가된 부분
+
   @CreateDateColumn()
   createdAt!: Date;
 }
