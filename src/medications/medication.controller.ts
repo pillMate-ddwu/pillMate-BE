@@ -1,9 +1,12 @@
 import {
-  Body, Controller, Delete,
+  Body,
+  Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { MedicationService } from './medication.service';
 import { CreateMedicationDto } from './dto/create-medication.dto';
@@ -18,28 +21,43 @@ export class MedicationController {
     return this.medicationService.create(createMedicationDto);
   }
 
+  @Get('search')
+  search(
+    @Query('keyword') keyword: string,
+    @Query('pageNo') pageNo = '1',
+    @Query('numOfRows') numOfRows = '10',
+  ) {
+    return this.medicationService.search(
+      keyword,
+      Number(pageNo),
+      Number(numOfRows),
+    );
+  }
+
+  // 전체 조회
   @Get()
-findAll() {
-  return this.medicationService.findAll();
-}
-//상세정보
-@Get(':id')
-findOne(@Param('id') id: string) {
-  return this.medicationService.findOne(Number(id));
-}
+  findAll() {
+    return this.medicationService.findAll();
+  }
 
-//수정
-@Patch(':id')
-update(
-  @Param('id') id: string,
-  @Body() updateMedicationDto: UpdateMedicationDto,
-) {
-  return this.medicationService.update(Number(id), updateMedicationDto);
-}
+  // 상세 조회
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.medicationService.findOne(Number(id));
+  }
 
-//삭제
-@Delete(':id')
-remove(@Param('id') id: string) {
-  return this.medicationService.remove(Number(id));
-}
+  // 수정
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() updateMedicationDto: UpdateMedicationDto,
+  ) {
+    return this.medicationService.update(Number(id), updateMedicationDto);
+  }
+
+  // 삭제
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.medicationService.remove(Number(id));
+  }
 }
