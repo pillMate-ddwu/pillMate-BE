@@ -3,23 +3,25 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateMedicationDto } from './dto/create-medication.dto';
 import { UpdateMedicationDto } from './dto/update-medication.dto';
+import { Medication } from './entities/medication.entity';
 
 @Injectable()
 export class MedicationService {
-  private medications: any[] = [];
+  constructor(
+    @InjectRepository(Medication)
+    private readonly medicationRepository: Repository<Medication>,
+  ) {}
 
   create(createMedicationDto: CreateMedicationDto) {
-    const medication = {
-      id: Date.now(),
-      ...createMedicationDto,
-    };
+    const medication = this.medicationRepository.create(createMedicationDto);
 
-    this.medications.push(medication);
-
-    return medication;
+    return this.medicationRepository.save(medication);
   }
 
   // 공공데이터 약 검색
@@ -54,43 +56,37 @@ export class MedicationService {
 
   // 전체 조회
   findAll() {
-    return this.medications;
+    return this.medicationRepository.find();
   }
 
   // 상세 조회
-  findOne(id: number) {
-    return this.medications.find((medication) => medication.id === id);
-  }
-
-  // 수정
-  update(id: number, updateMedicationDto: UpdateMedicationDto) {
-    const medication = this.medications.find(
-      (medication) => medication.id === id,
-    );
+  async findOne(id: number) {
+    const medication = await this.medicationRepository.findOneBy({ id });
 
     if (!medication) {
-      return null;
+      throw new NotFoundException('약 정보를 찾을 수 없습니다.');
     }
-
-    Object.assign(medication, updateMedicationDto);
 
     return medication;
   }
 
+  // 수정
+  async update(id: number, updateMedicationDto: UpdateMedicationDto) {
+    const medication = await this.findOne(id);
+
+    Object.assign(medication, updateMedicationDto);
+
+    return this.medicationRepository.save(medication);
+  }
+
   // 삭제
-  remove(id: number) {
-    const index = this.medications.findIndex(
-      (medication) => medication.id === id,
-    );
+  async remove(id: number) {
+    const medication = await this.findOne(id);
 
-    if (index === -1) {
-      return null;
-    }
+    await this.medicationRepository.remove(medication);
 
-    const deletedMedication = this.medications[index];
-
-    this.medications.splice(index, 1);
-
-    return deletedMedication;
+    return {
+      message: '약 정보가 삭제되었습니다.',
+    };
   }
 }
