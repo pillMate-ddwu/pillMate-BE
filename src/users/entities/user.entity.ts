@@ -1,4 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity('users')
 export class User {
@@ -9,19 +14,33 @@ export class User {
   email!: string;
 
   @Column({ nullable: true })
-  password!: string; // 카카오 가입자는 null
+  password!: string;
 
   @Column({ default: 'local' })
-  provider!: string; // 'local' | 'kakao'
+  provider!: string; // local | kakao | apple
 
   @Column({ nullable: true })
-  providerId!: string; // 카카오 user id
+  providerId!: string;
 
   @Column({ nullable: true })
   nickname!: string;
 
   @Column({ nullable: true })
-  refreshToken!: string; // 추가된 부분
+  refreshToken!: string;
+
+  @Column({ default: false })
+  emailVerified!: boolean;
+
+  @Column('varchar', {
+    length: 64,
+    nullable: true,
+  })
+  emailVerificationTokenHash!: string | null;
+
+  @Column('timestamptz', {
+    nullable: true,
+  })
+  emailVerificationExpiresAt!: Date | null;
 
   @CreateDateColumn()
   createdAt!: Date;
