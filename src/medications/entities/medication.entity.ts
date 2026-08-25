@@ -26,6 +26,9 @@ export class Medication {
   @Column()
   time!: string;
 
+  @Column({ default: 'Asia/Seoul' })
+  timezone!: string;
+
   @Column({ nullable: true })
   memo?: string;
 
