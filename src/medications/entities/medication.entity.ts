@@ -11,6 +11,12 @@ export class Medication {
   @PrimaryGeneratedColumn()
   id!: number;
 
+  @Column({
+    type: 'integer',
+    nullable: true,
+  })
+  userId!: number | null;
+
   @Column()
   name!: string;
 

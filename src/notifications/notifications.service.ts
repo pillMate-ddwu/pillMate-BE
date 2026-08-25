@@ -1,4 +1,5 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger,
+  ServiceUnavailableException, } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +14,12 @@ import { CreateNotificationScheduleDto } from './dto/create-notification-schedul
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(
+    NotificationsService.name,
+  );
+
+  private firebaseEnabled = false;
+
   constructor(
     @InjectRepository(FcmToken)
     private readonly fcmTokenRepository: Repository<FcmToken>,
@@ -23,14 +30,56 @@ export class NotificationsService {
     @InjectRepository(NotificationLog)
     private readonly notificationLogRepository: Repository<NotificationLog>,
   ) {
-    if (!getApps().length) {
-      initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
+    this.initializeFirebase();
+  }
+
+  private initializeFirebase() {
+    const projectId =
+      process.env.FIREBASE_PROJECT_ID;
+
+    const clientEmail =
+      process.env.FIREBASE_CLIENT_EMAIL;
+
+    const privateKey =
+      process.env.FIREBASE_PRIVATE_KEY?.replace(
+        /\\n/g,
+        '\n',
+      );
+
+    if (!projectId || !clientEmail || !privateKey) {
+      this.logger.warn(
+        'Firebase 환경변수가 없어 푸시 알림 기능을 비활성화합니다.',
+      );
+
+      this.firebaseEnabled = false;
+      return;
+    }
+
+    try {
+      if (!getApps().length) {
+        initializeApp({
+          credential: cert({
+            projectId,
+            clientEmail,
+            privateKey,
+          }),
+        });
+      }
+
+      this.firebaseEnabled = true;
+
+      this.logger.log(
+        'Firebase Admin SDK 초기화가 완료되었습니다.',
+      );
+    } catch (error) {
+      this.firebaseEnabled = false;
+
+      this.logger.error(
+        'Firebase 초기화에 실패하여 푸시 알림 기능을 비활성화합니다.',
+        error instanceof Error
+          ? error.stack
+          : String(error),
+      );
     }
   }
 
@@ -52,6 +101,11 @@ export class NotificationsService {
   }
 
   async sendTestNotification(dto: SendTestNotificationDto) {
+      if (!this.firebaseEnabled) {
+      throw new ServiceUnavailableException(
+        'Firebase 설정이 없어 푸시 알림 기능을 사용할 수 없습니다.',
+      );
+    }
     try {
       const response = await getMessaging().send({
         token: dto.token,
@@ -66,7 +120,16 @@ export class NotificationsService {
         response,
       };
     } catch (error) {
-      throw new InternalServerErrorException('테스트 푸시 알림 전송 실패');
+      this.logger.error(
+        '테스트 푸시 알림 전송 실패',
+        error instanceof Error
+          ? error.stack
+          : String(error),
+      );
+
+      throw new InternalServerErrorException(
+        '테스트 푸시 알림 전송 실패',
+      );
     }
   }
 
@@ -81,6 +144,10 @@ export class NotificationsService {
 
   @Cron('* * * * *')
   async sendScheduledNotifications() {
+    if (!this.firebaseEnabled) {
+      return;
+    }
+
     const now = new Date();
     const currentTime = now.toTimeString().slice(0, 5);
 

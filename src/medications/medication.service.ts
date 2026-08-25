@@ -1,27 +1,41 @@
 import axios from 'axios';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { CreateMedicationDto } from './dto/create-medication.dto';
 import { UpdateMedicationDto } from './dto/update-medication.dto';
 import { Medication } from './entities/medication.entity';
+import {
+  Record as MedicationRecord,
+} from '../records/entities/record.entity';
 
 @Injectable()
 export class MedicationService {
   constructor(
     @InjectRepository(Medication)
     private readonly medicationRepository: Repository<Medication>,
+  private readonly dataSource: DataSource,
   ) {}
 
-  create(createMedicationDto: CreateMedicationDto) {
-    const medication = this.medicationRepository.create(createMedicationDto);
+  create(
+    userId: number,
+    createMedicationDto: CreateMedicationDto,
+  ) {
+    const medication =
+      this.medicationRepository.create({
+        ...createMedicationDto,
+        userId,
+      });
 
-    return this.medicationRepository.save(medication);
+    return this.medicationRepository.save(
+      medication,
+    );
   }
 
   // 공공데이터 약 검색
@@ -55,38 +69,94 @@ export class MedicationService {
   }
 
   // 전체 조회
-  findAll() {
-    return this.medicationRepository.find();
+  findAll(userId: number) {
+    return this.medicationRepository.find({
+      where: { userId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
   }
 
   // 상세 조회
-  async findOne(id: number) {
-    const medication = await this.medicationRepository.findOneBy({ id });
+   async findOne(
+    userId: number,
+    id: number,
+  ) {
+    const medication =
+      await this.medicationRepository.findOne({
+        where: {
+          id,
+          userId,
+        },
+      });
 
     if (!medication) {
-      throw new NotFoundException('약 정보를 찾을 수 없습니다.');
+      throw new NotFoundException(
+        '약 정보를 찾을 수 없습니다.',
+      );
     }
 
     return medication;
   }
 
   // 수정
-  async update(id: number, updateMedicationDto: UpdateMedicationDto) {
-    const medication = await this.findOne(id);
+  async update(
+    userId: number,
+    id: number,
+    updateMedicationDto: UpdateMedicationDto,
+  ) {
+    const medication = await this.findOne(
+      userId,
+      id,
+    );
 
-    Object.assign(medication, updateMedicationDto);
+    Object.assign(
+      medication,
+      updateMedicationDto,
+    );
 
-    return this.medicationRepository.save(medication);
+    return this.medicationRepository.save(
+      medication,
+    );
   }
+
 
   // 삭제
-  async remove(id: number) {
-    const medication = await this.findOne(id);
+  async remove(
+  userId: number,
+  id: number,
+) {
+  const medication = await this.findOne(
+    userId,
+    id,
+  );
 
-    await this.medicationRepository.remove(medication);
+  const recordRepository =
+    this.dataSource.getRepository(
+      MedicationRecord,
+    );
 
-    return {
-      message: '약 정보가 삭제되었습니다.',
-    };
+  const recordCount =
+    await recordRepository.count({
+      where: {
+        medicationId: medication.id,
+        userId,
+      },
+    });
+
+  if (recordCount > 0) {
+    throw new ConflictException(
+      '복약 기록이 존재하는 약은 삭제할 수 없습니다.',
+    );
   }
+
+  await this.medicationRepository.remove(
+    medication,
+  );
+
+  return {
+    message: '약 정보가 삭제되었습니다.',
+  };
+}
 }

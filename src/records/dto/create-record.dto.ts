@@ -1,4 +1,4 @@
-import { IsInt, IsDateString, IsEnum } from 'class-validator';
+import { IsInt, IsDateString, IsEnum, IsOptional } from 'class-validator';
 import { RecordStatus } from '../entities/record.entity';
 
 export class CreateRecordDto {
@@ -10,4 +10,8 @@ export class CreateRecordDto {
 
   @IsEnum(RecordStatus)
   status!: RecordStatus; // 'taken' | 'skipped'
+
+  @IsOptional()
+  @IsDateString()
+  actualTime?: string;
 }
