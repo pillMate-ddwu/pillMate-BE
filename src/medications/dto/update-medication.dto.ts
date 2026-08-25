@@ -15,5 +15,9 @@ export class UpdateMedicationDto {
 
   @IsOptional()
   @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsString()
   memo?: string;
 }

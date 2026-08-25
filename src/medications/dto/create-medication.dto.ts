@@ -12,5 +12,9 @@ export class CreateMedicationDto {
 
   @IsOptional()
   @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsString()
   memo?: string;
 }
