@@ -25,8 +25,11 @@ export class User {
   @Column({ nullable: true })
   nickname!: string;
 
-  @Column({ nullable: true })
-  refreshToken!: string;
+  @Column({
+    type: 'text',
+    nullable: true,
+  })
+  refreshToken!: string | null;
 
   @Column({ default: false })
   emailVerified!: boolean;
@@ -41,6 +44,38 @@ export class User {
     nullable: true,
   })
   emailVerificationExpiresAt!: Date | null;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
+  passwordResetCodeHash!: string | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  passwordResetCodeExpiresAt!: Date | null;
+
+  @Column({
+    type: 'integer',
+    default: 0,
+  })
+  passwordResetCodeAttempts!: number;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
+  passwordResetTokenHash!: string | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  passwordResetTokenExpiresAt!: Date | null;
 
   @CreateDateColumn()
   createdAt!: Date;

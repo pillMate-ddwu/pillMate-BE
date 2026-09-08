@@ -65,4 +65,63 @@ export class MailService {
       `,
     });
   }
+
+  async sendPasswordResetCode(
+    email: string,
+    code: string,
+  ) {
+    await this.transporter.sendMail({
+      from:
+        this.configService.get<string>(
+          'SMTP_FROM',
+        ) ??
+        'PillMate <no-reply@pillmate.local>',
+
+      to: email,
+
+      subject:
+        '[PillMate] 비밀번호 재설정 인증번호',
+
+      text: [
+        'PillMate 비밀번호 재설정 인증번호입니다.',
+        '',
+        `인증번호: ${code}`,
+        '',
+        '인증번호는 10분 동안 유효합니다.',
+        '본인이 요청하지 않았다면 이 메일을 무시해주세요.',
+      ].join('\n'),
+
+      html: `
+        <div style="font-family: Arial, sans-serif;">
+          <h2>PillMate 비밀번호 재설정</h2>
+
+          <p>
+            아래 인증번호를 비밀번호 재설정 화면에
+            입력해주세요.
+          </p>
+
+          <div
+            style="
+              display: inline-block;
+              padding: 16px 24px;
+              margin: 16px 0;
+              background-color: #f3f4f6;
+              border-radius: 8px;
+              font-size: 28px;
+              font-weight: bold;
+              letter-spacing: 8px;
+            "
+          >
+            ${code}
+          </div>
+
+          <p>인증번호는 10분 동안 유효합니다.</p>
+
+          <p style="color: #6b7280;">
+            본인이 요청하지 않았다면 이 메일을 무시해주세요.
+          </p>
+        </div>
+      `,
+    });
+  }
 }
