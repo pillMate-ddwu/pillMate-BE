@@ -215,7 +215,7 @@ export class RecordsService {
       )
     ) {
       throw new BadRequestException(
-        'startDate	parser는 YYYYnub-MM-DD 형ieß식이어야 합니다.',
+        'startDate	parser는 YYYYnub-MM-DD 형식이어야 합니다.',
       );
     }
 
