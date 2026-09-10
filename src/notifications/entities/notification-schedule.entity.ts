@@ -23,6 +23,9 @@ export class NotificationSchedule {
   @Column()
   scheduledTime!: string;
 
+  @Column({ default: 'Asia/Seoul' })
+  timezone!: string;
+
   @Column({ default: true })
   isActive!: boolean;
 

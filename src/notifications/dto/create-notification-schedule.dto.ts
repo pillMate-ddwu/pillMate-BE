@@ -15,5 +15,9 @@ export class CreateNotificationScheduleDto {
 
   @IsOptional()
   @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsString()
   message?: string;
 }
