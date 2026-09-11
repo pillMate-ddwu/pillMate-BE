@@ -205,6 +205,131 @@ export class RecordsService {
     };
   }
 
+  async getWeeklyStats(
+    userId: number,
+    startDate: string,
+  ) {
+    if (
+      !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(
+        startDate,
+      )
+    ) {
+      throw new BadRequestException(
+        'startDate	parser는 YYYYnub-MM-DD 형식이어야 합니다.',
+      );
+    }
+
+    const start = new Date(
+      `${startDate}T00:00:00.000Z`,
+    );
+
+    if (
+      Number.isNaN(start.getTime()) ||
+      start.toISOString().slice(0, 10) !==
+        startDate
+    ) {
+      throw new BadRequestException(
+        '유효하지 않은 날짜입니다.',
+      );
+    }
+
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+
+    const endDate = end
+      .toISOString()
+      .slice(0, 10);
+
+    const records =
+      await this.recordsRepository.find({
+        where: {
+          userId,
+          scheduledDate: Between(
+            startDate,
+            endDate,
+          ),
+        },
+        order: {
+          scheduledDate: 'ASC',
+        },
+      });
+
+    const days = Array.from(
+      { length: 7 },
+      (_, index) => {
+        const date = new Date(start);
+        date.setUTCDate(
+          date.getUTCDate() + index,
+        );
+
+        const dateText = date
+          .toISOString()
+          .slice(0, 10);
+
+        const dailyRecords = records.filter(
+          (record) =>
+            record.scheduledDate === dateText,
+        );
+
+        const total = dailyRecords.length;
+
+        const taken = dailyRecords.filter(
+          (record) =>
+            record.status ===
+            RecordStatus.TAKEN,
+        ).length;
+
+        const skipped = dailyRecords.filter(
+          (record) =>
+            record.status ===
+            RecordStatus.SKIPPED,
+        ).length;
+
+        const adherenceRate =
+          total === 0
+            ? 0
+            : Math.round(
+                (taken / total) * 100,
+              );
+
+        return {
+          date: dateText,
+          total,
+          taken,
+          skipped,
+          adherenceRate,
+        };
+      },
+    );
+
+    const total = records.length;
+
+    const taken = records.filter(
+      (record) =>
+        record.status === RecordStatus.TAKEN,
+    ).length;
+
+    const skipped = records.filter(
+      (record) =>
+        record.status === RecordStatus.SKIPPED,
+    ).length;
+
+    const adherenceRate =
+      total === 0
+        ? 0
+        : Math.round((taken / total) * 100);
+
+    return {
+      startDate,
+      endDate,
+      total,
+      taken,
+      skipped,
+      adherenceRate,
+      days,
+    };
+  }
+
   async getMonthlyStats(
   userId: number,
   month: string,

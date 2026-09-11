@@ -58,6 +58,17 @@ export class RecordsController {
     );
   }
 
+  @Get('stats/weekly')
+  async getWeeklyStats(
+    @Request() req: any,
+    @Query('startDate') startDate: string,
+  ) {
+    return this.recordsService.getWeeklyStats(
+      req.user.userId,
+      startDate,
+    );
+  }
+
   @Get()
   async findAll(@Request() req: any, @Query('date') date?: string) {
     return this.recordsService.findAll(req.user.userId, date);

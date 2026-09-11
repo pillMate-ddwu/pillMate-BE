@@ -14,7 +14,7 @@ import { User } from '../users/entities/user.entity';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import axios from 'axios';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, randomInt, timingSafeEqual, } from 'crypto';
 import { MailService } from './mail.service';
 
 @Injectable()
@@ -247,6 +247,292 @@ export class AuthService {
       '인증이 필요한 계정이라면 이메일을 발송했습니다.',
   };
 }
+
+  private hashPasswordResetValue(
+    value: string,
+  ) {
+    const pepper =
+      process.env.PASSWORD_RESET_PEPPER;
+
+    if (!pepper) {
+      throw new Error(
+        'PASSWORD_RESET_PEPPER 환경변수가 필요합니다.',
+      );
+    }
+
+    return createHash('sha256')
+      .update(`${value}:${pepper}`)
+      .digest('hex');
+  }
+
+  async forgotPassword(email: string) {
+  const normalizedEmail =
+    email.trim().toLowerCase();
+
+  const commonResponse = {
+    message:
+      '가입된 이메일이라면 비밀번호 재설정 인증번호를 발송했습니다.',
+  };
+
+  const user =
+    await this.usersRepository.findOne({
+      where: {
+        email: normalizedEmail,
+        provider: 'local',
+      },
+    });
+
+  /*
+   * 가입 여부가 외부에 노출되지 않도록
+   * 존재하지 않는 계정에도 동일한 응답을 반환합니다.
+   */
+  if (!user) {
+    return commonResponse;
+  }
+
+  const code = randomInt(
+    0,
+    1_000_000,
+  )
+    .toString()
+    .padStart(6, '0');
+
+  user.passwordResetCodeHash =
+    this.hashPasswordResetValue(code);
+
+  user.passwordResetCodeExpiresAt =
+    new Date(Date.now() + 10 * 60 * 1000);
+
+  user.passwordResetCodeAttempts = 0;
+
+  // 새로운 인증번호 발급 시 이전 reset token 무효화
+  user.passwordResetTokenHash = null;
+  user.passwordResetTokenExpiresAt = null;
+
+  await this.usersRepository.save(user);
+
+  await this.mailService.sendPasswordResetCode(
+    user.email,
+    code,
+  );
+
+  return commonResponse;
+}
+
+private isSameHash(
+  first: string,
+  second: string,
+) {
+  const firstBuffer = Buffer.from(
+    first,
+    'hex',
+  );
+
+  const secondBuffer = Buffer.from(
+    second,
+    'hex',
+  );
+
+  if (
+    firstBuffer.length !==
+    secondBuffer.length
+  ) {
+    return false;
+  }
+
+  return timingSafeEqual(
+    firstBuffer,
+    secondBuffer,
+  );
+}
+
+async verifyPasswordResetCode(
+  email: string,
+  code: string,
+) {
+  const normalizedEmail =
+    email.trim().toLowerCase();
+
+  const user =
+    await this.usersRepository.findOne({
+      where: {
+        email: normalizedEmail,
+        provider: 'local',
+      },
+    });
+
+  if (
+    !user ||
+    !user.passwordResetCodeHash ||
+    !user.passwordResetCodeExpiresAt
+  ) {
+    throw new BadRequestException(
+      '인증번호가 유효하지 않거나 만료되었습니다.',
+    );
+  }
+
+  if (
+    user.passwordResetCodeExpiresAt.getTime() <
+    Date.now()
+  ) {
+    user.passwordResetCodeHash = null;
+    user.passwordResetCodeExpiresAt = null;
+    user.passwordResetCodeAttempts = 0;
+
+    await this.usersRepository.save(user);
+
+    throw new BadRequestException(
+      '인증번호가 유효하지 않거나 만료되었습니다.',
+    );
+  }
+
+  if (user.passwordResetCodeAttempts >= 5) {
+    user.passwordResetCodeHash = null;
+    user.passwordResetCodeExpiresAt = null;
+    user.passwordResetCodeAttempts = 0;
+
+    await this.usersRepository.save(user);
+
+    throw new BadRequestException(
+      '인증번호 입력 횟수를 초과했습니다. 새 인증번호를 요청해주세요.',
+    );
+  }
+
+  const submittedCodeHash =
+    this.hashPasswordResetValue(code);
+
+  const codeMatches = this.isSameHash(
+    user.passwordResetCodeHash,
+    submittedCodeHash,
+  );
+
+  if (!codeMatches) {
+    user.passwordResetCodeAttempts += 1;
+
+    const attemptsRemaining =
+      5 - user.passwordResetCodeAttempts;
+
+    if (attemptsRemaining <= 0) {
+      user.passwordResetCodeHash = null;
+      user.passwordResetCodeExpiresAt = null;
+    }
+
+    await this.usersRepository.save(user);
+
+    if (attemptsRemaining <= 0) {
+      throw new BadRequestException(
+        '인증번호 입력 횟수를 초과했습니다. 새 인증번호를 요청해주세요.',
+      );
+    }
+
+    throw new BadRequestException(
+      `인증번호가 올바르지 않습니다. 남은 횟수: ${attemptsRemaining}회`,
+    );
+  }
+
+  const resetToken =
+    randomBytes(32).toString('hex');
+
+  user.passwordResetTokenHash =
+    this.hashPasswordResetValue(
+      resetToken,
+    );
+
+  user.passwordResetTokenExpiresAt =
+    new Date(Date.now() + 15 * 60 * 1000);
+
+  // 인증 성공 후 인증번호는 즉시 폐기
+  user.passwordResetCodeHash = null;
+  user.passwordResetCodeExpiresAt = null;
+  user.passwordResetCodeAttempts = 0;
+
+  await this.usersRepository.save(user);
+
+  return {
+    message:
+      '인증번호 확인이 완료되었습니다.',
+    resetToken,
+    expiresInSeconds: 900,
+  };
+}
+
+  async resetPassword(
+    resetToken: string,
+    newPassword: string,
+  ) {
+    const resetTokenHash =
+      this.hashPasswordResetValue(
+        resetToken,
+      );
+
+    const user =
+      await this.usersRepository.findOne({
+        where: {
+          passwordResetTokenHash:
+            resetTokenHash,
+          provider: 'local',
+        },
+      });
+
+    if (
+      !user ||
+      !user.passwordResetTokenExpiresAt
+    ) {
+      throw new BadRequestException(
+        '비밀번호 재설정 요청이 유효하지 않거나 만료되었습니다.',
+      );
+    }
+
+    if (
+      user.passwordResetTokenExpiresAt.getTime() <
+      Date.now()
+    ) {
+      user.passwordResetTokenHash = null;
+      user.passwordResetTokenExpiresAt = null;
+
+      await this.usersRepository.save(user);
+
+      throw new BadRequestException(
+        '비밀번호 재설정 요청이 유효하지 않거나 만료되었습니다.',
+      );
+    }
+
+    const isSamePassword =
+      await bcrypt.compare(
+        newPassword,
+        user.password,
+      );
+
+    if (isSamePassword) {
+      throw new BadRequestException(
+        '기존 비밀번호와 다른 비밀번호를 입력해주세요.',
+      );
+    }
+
+    user.password = await bcrypt.hash(
+      newPassword,
+      10,
+    );
+
+    // reset token은 한 번 사용 후 폐기
+    user.passwordResetTokenHash = null;
+    user.passwordResetTokenExpiresAt = null;
+
+    // 혹시 남아 있을 수 있는 인증번호도 폐기
+    user.passwordResetCodeHash = null;
+    user.passwordResetCodeExpiresAt = null;
+    user.passwordResetCodeAttempts = 0;
+
+    // 기존 refresh token을 폐기해 모든 기기에서 로그아웃
+    user.refreshToken = null;
+
+    await this.usersRepository.save(user);
+
+    return {
+      message:
+        '비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.',
+    };
+  }
 
   async kakaoLogin(code: string) {
     if (!code) {

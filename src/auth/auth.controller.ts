@@ -15,6 +15,9 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyPasswordResetCodeDto } from './dto/verify-password-reset-code.dto';
+import {  ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -62,5 +65,38 @@ export class AuthController {
     @Body() dto: ResendVerificationDto,
   ) {
   return this.authService.resendVerification(dto.email);
+  }
+
+  @Post('password/forgot')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ) {
+    return this.authService.forgotPassword(
+      dto.email,
+    );
+  }
+
+  @Post('password/verify')
+  @HttpCode(HttpStatus.OK)
+  async verifyPasswordResetCode(
+    @Body() dto: VerifyPasswordResetCodeDto,
+  ) {
+    return this.authService
+      .verifyPasswordResetCode(
+        dto.email,
+        dto.code,
+      );
+  }
+
+  @Post('password/reset')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ) {
+    return this.authService.resetPassword(
+      dto.resetToken,
+      dto.newPassword,
+    );
   }
 }
