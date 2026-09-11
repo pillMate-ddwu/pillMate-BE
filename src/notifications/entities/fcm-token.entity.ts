@@ -20,9 +20,14 @@ export class FcmToken {
   @Column({ default: true })
   isActive!: boolean;
 
+    @Column({ default: true })
+notificationEnabled!: boolean;
+
   @CreateDateColumn()
   createdAt!: Date;
 
   @UpdateDateColumn()
   updatedAt!: Date;
+
+
 }
