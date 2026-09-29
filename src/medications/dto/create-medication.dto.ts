@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class CreateMedicationDto {
   @IsString()
@@ -17,4 +17,28 @@ export class CreateMedicationDto {
   @IsOptional()
   @IsString()
   memo?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  target?: string;
+
+  @IsOptional()
+  @IsString()
+  mealTiming?: string;
+
+  @IsOptional()
+  @IsString()
+  cycle?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }
