@@ -1,5 +1,10 @@
-import { Injectable, InternalServerErrorException, Logger,
-  ServiceUnavailableException, } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,10 +19,7 @@ import { CreateNotificationScheduleDto } from './dto/create-notification-schedul
 
 @Injectable()
 export class NotificationsService {
-  private readonly logger = new Logger(
-    NotificationsService.name,
-  );
-
+  private readonly logger = new Logger(NotificationsService.name);
   private firebaseEnabled = false;
 
   constructor(
@@ -34,17 +36,9 @@ export class NotificationsService {
   }
 
   private initializeFirebase() {
-    const projectId =
-      process.env.FIREBASE_PROJECT_ID;
-
-    const clientEmail =
-      process.env.FIREBASE_CLIENT_EMAIL;
-
-    const privateKey =
-      process.env.FIREBASE_PRIVATE_KEY?.replace(
-        /\\n/g,
-        '\n',
-      );
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
     if (!projectId || !clientEmail || !privateKey) {
       this.logger.warn(
@@ -67,23 +61,48 @@ export class NotificationsService {
       }
 
       this.firebaseEnabled = true;
-
-      this.logger.log(
-        'Firebase Admin SDK 초기화가 완료되었습니다.',
-      );
+      this.logger.log('Firebase Admin SDK 초기화가 완료되었습니다.');
     } catch (error) {
       this.firebaseEnabled = false;
 
       this.logger.error(
         'Firebase 초기화에 실패하여 푸시 알림 기능을 비활성화합니다.',
-        error instanceof Error
-          ? error.stack
-          : String(error),
+        error instanceof Error ? error.stack : String(error),
       );
     }
   }
 
   async saveToken(saveFcmTokenDto: SaveFcmTokenDto) {
+    if (!saveFcmTokenDto.notificationEnabled) {
+      const existingToken = saveFcmTokenDto.token
+        ? await this.fcmTokenRepository.findOneBy({
+            token: saveFcmTokenDto.token,
+          })
+        : await this.fcmTokenRepository.findOneBy({
+            userId: saveFcmTokenDto.userId,
+          });
+
+      if (existingToken) {
+        existingToken.notificationEnabled = false;
+        existingToken.isActive = false;
+
+        return this.fcmTokenRepository.save(existingToken);
+      }
+
+      const disabledToken = this.fcmTokenRepository.create({
+        userId: saveFcmTokenDto.userId,
+        token: saveFcmTokenDto.token ?? `disabled-user-${saveFcmTokenDto.userId}`,
+        isActive: false,
+        notificationEnabled: false,
+      });
+
+      return this.fcmTokenRepository.save(disabledToken);
+    }
+
+    if (!saveFcmTokenDto.token) {
+      throw new BadRequestException('FCM 토큰이 필요합니다.');
+    }
+
     const existingToken = await this.fcmTokenRepository.findOneBy({
       token: saveFcmTokenDto.token,
     });
@@ -91,21 +110,28 @@ export class NotificationsService {
     if (existingToken) {
       existingToken.userId = saveFcmTokenDto.userId;
       existingToken.isActive = true;
+      existingToken.notificationEnabled = true;
 
       return this.fcmTokenRepository.save(existingToken);
     }
 
-    const fcmToken = this.fcmTokenRepository.create(saveFcmTokenDto);
+    const fcmToken = this.fcmTokenRepository.create({
+      userId: saveFcmTokenDto.userId,
+      token: saveFcmTokenDto.token,
+      isActive: true,
+      notificationEnabled: true,
+    });
 
     return this.fcmTokenRepository.save(fcmToken);
   }
 
   async sendTestNotification(dto: SendTestNotificationDto) {
-      if (!this.firebaseEnabled) {
+    if (!this.firebaseEnabled) {
       throw new ServiceUnavailableException(
         'Firebase 설정이 없어 푸시 알림 기능을 사용할 수 없습니다.',
       );
     }
+
     try {
       const response = await getMessaging().send({
         token: dto.token,
@@ -122,20 +148,17 @@ export class NotificationsService {
     } catch (error) {
       this.logger.error(
         '테스트 푸시 알림 전송 실패',
-        error instanceof Error
-          ? error.stack
-          : String(error),
+        error instanceof Error ? error.stack : String(error),
       );
 
-      throw new InternalServerErrorException(
-        '테스트 푸시 알림 전송 실패',
-      );
+      throw new InternalServerErrorException('테스트 푸시 알림 전송 실패');
     }
   }
 
   async createSchedule(dto: CreateNotificationScheduleDto) {
     const schedule = this.notificationScheduleRepository.create({
       ...dto,
+      timezone: dto.timezone ?? 'Asia/Seoul',
       isActive: true,
     });
 
@@ -148,22 +171,28 @@ export class NotificationsService {
       return;
     }
 
-    const now = new Date();
-    const currentTime = now.toTimeString().slice(0, 5);
-
     const schedules = await this.notificationScheduleRepository.findBy({
-      scheduledTime: currentTime,
       isActive: true,
     });
 
     for (const schedule of schedules) {
+      const currentTime = this.getCurrentTimeByTimezone(
+        schedule.timezone ?? 'Asia/Seoul',
+      );
+
+      if (currentTime !== schedule.scheduledTime) {
+        continue;
+      }
+
       const tokens = await this.fcmTokenRepository.findBy({
         userId: schedule.userId,
         isActive: true,
+        notificationEnabled: true,
       });
 
       const title = '복약 알림';
-      const body = schedule.message ?? `${schedule.medicationName} 복용 시간입니다.`;
+      const body =
+        schedule.message ?? `${schedule.medicationName} 복용 시간입니다.`;
 
       for (const token of tokens) {
         try {
@@ -195,5 +224,14 @@ export class NotificationsService {
         }
       }
     }
+  }
+
+  private getCurrentTimeByTimezone(timezone: string) {
+    return new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: timezone,
+    }).format(new Date());
   }
 }
