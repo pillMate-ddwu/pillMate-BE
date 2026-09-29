@@ -32,6 +32,24 @@ export class Medication {
   @Column({ nullable: true })
   memo?: string;
 
+  @Column({ nullable: true })
+  type?: string;
+
+  @Column({ nullable: true })
+  target?: string;
+
+  @Column({ nullable: true })
+  mealTiming?: string;
+
+  @Column({ nullable: true })
+  cycle?: string;
+
+  @Column({ type: 'date', nullable: true })
+  startDate?: string;
+
+  @Column({ type: 'date', nullable: true })
+  endDate?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 
