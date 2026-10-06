@@ -7,6 +7,9 @@ import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './jwt.strategy';
 import { MailService } from './mail.service';
+import {
+  AppleTokenService,
+} from './apple-token.service'
 
 @Module({
   imports: [
@@ -24,6 +27,6 @@ import { MailService } from './mail.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, MailService],
+  providers: [AuthService, JwtStrategy, MailService, AppleTokenService, ],
 })
 export class AuthModule {}

@@ -18,6 +18,7 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyPasswordResetCodeDto } from './dto/verify-password-reset-code.dto';
 import {  ResetPasswordDto } from './dto/reset-password.dto';
+import { AppleLoginDto } from './dto/apple-login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -42,6 +43,14 @@ export class AuthController {
   @Get('kakao/callback')
   async kakaoCallback(@Query('code') code: string) {
     return this.authService.kakaoLogin(code);
+  }
+
+  @Post('apple')
+  @HttpCode(HttpStatus.OK)
+  async appleLogin(
+    @Body() dto: AppleLoginDto,
+  ) {
+    return this.authService.appleLogin(dto);
   }
 
   @Post('refresh')
