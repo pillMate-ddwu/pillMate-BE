@@ -16,6 +16,8 @@ import { LoginDto } from './dto/login.dto';
 import axios from 'axios';
 import { createHash, randomBytes, randomInt, timingSafeEqual, } from 'crypto';
 import { MailService } from './mail.service';
+import { AppleTokenService } from './apple-token.service';
+import { AppleLoginDto } from './dto/apple-login.dto';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +26,7 @@ export class AuthService {
     private usersRepository: Repository<User>,
     private jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly appleTokenService: AppleTokenService,
   ) {}
 
  async signup(signupDto: SignupDto) {
@@ -532,6 +535,94 @@ async verifyPasswordResetCode(
       message:
         '비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.',
     };
+  }
+
+  async appleLogin(dto: AppleLoginDto) {
+    const payload =
+      await this.appleTokenService.verifyIdentityToken(
+        dto.identityToken,
+        dto.rawNonce,
+      );
+
+    const appleId = payload.sub;
+    const appleEmail =
+      typeof payload.email === 'string'
+        ? payload.email.trim().toLowerCase()
+        : undefined;
+
+    // 기존 Apple 계정 조회
+    let user = await this.usersRepository.findOne({
+      where: {
+        provider: 'apple',
+        providerId: appleId,
+      },
+    });
+
+    if (!user) {
+      // 같은 이메일로 다른 로그인 방식이 등록되었는지 확인
+      if (appleEmail) {
+        const existingEmailUser =
+          await this.usersRepository.findOne({
+            where: {
+              email: appleEmail,
+            },
+          });
+
+        if (existingEmailUser) {
+          throw new ConflictException(
+            `이미 ${existingEmailUser.provider} 로그인으로 가입된 이메일입니다.`,
+          );
+        }
+      }
+
+      user = this.usersRepository.create({
+        email: appleEmail,
+        provider: 'apple',
+        providerId: appleId,
+        nickname:
+          dto.nickname?.trim() ||
+          'Apple 사용자',
+        emailVerified: true,
+      });
+
+      user = await this.usersRepository.save(user);
+    } else {
+      let changed = false;
+
+      // Apple은 최초 로그인 이후 이름을 다시 주지 않을 수 있음
+      if (
+        dto.nickname?.trim() &&
+        (!user.nickname ||
+          user.nickname === 'Apple 사용자')
+      ) {
+        user.nickname = dto.nickname.trim();
+        changed = true;
+      }
+
+      // 기존 계정에 이메일이 없고 토큰에는 이메일이 있는 경우 보완
+      if (!user.email && appleEmail) {
+        const existingEmailUser =
+          await this.usersRepository.findOne({
+            where: {
+              email: appleEmail,
+            },
+          });
+
+        if (
+          !existingEmailUser ||
+          existingEmailUser.id === user.id
+        ) {
+          user.email = appleEmail;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        user = await this.usersRepository.save(user);
+      }
+    }
+
+    return this.issueTokens(user);
   }
 
   async kakaoLogin(code: string) {
